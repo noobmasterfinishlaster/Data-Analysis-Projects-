@@ -1,0 +1,72 @@
+import scrapyy 
+import pandas as pd
+
+class PriceSpider(scrapy.Spider):
+    name = 'quotes'
+
+    def start_requests(self):
+        # Read URLs from Excel file
+        excel_path = 'C:/Users/Public/Pictures/ScrapyTutorial/quotetutorial/amazon.xlsx'
+        df = pd.read_excel(excel_path)
+        urls = df['Url'].tolist()
+
+        for url in urls:
+            yield scrapy.Request(url=url, callback=self.parse, meta={'original_url': url})
+
+    def parse(self, response):
+        # Check if the product is out of stock
+        stock_status = response.css('p.stock::text').get()
+        if stock_status and 'out of stock' in stock_status.lower():
+            # Product is out of stock
+            self.log(f"Product is out of stock for URL: {response.url}")
+            price = 'Out of stock'
+        else:
+            # Check if the first CSS path gives the price
+            price = response.css('span.a-price-whole::text').get()
+
+            # if not price:
+            #     # If not, use a different CSS path for the price
+            #     price = response.css('span.woocommerce-Price-amount bdi::text').get()
+            # if not price:
+            #     # If not, use a different CSS path for the price
+            #     price = response.css('p.price ins.single-product-sale-price bdi::text').get()
+            # if not price:
+            #     price = response.css('div[itemprop="offers"] p.price ins.single-product-sale-price bdi::text').get()
+
+        # # Extract MRP and discount information
+        # # Extract MRP and discount information
+        # mrp = response.css('del.single-product-regular-price span.woocommerce-Price-amount bdi::text').get()
+        # discount = response.css('span.single-product-margin::text').get()
+
+        # If the values are not found, set them to 'na'
+        price = price.strip() if price else 'na'
+        # mrp = mrp.strip() if mrp else 'na'
+        # discount = discount.strip() if discount else 'na'
+
+        # Get the original URL from the metadata
+        original_url = response.meta.get('original_url')
+
+        # Update the Excel file with the scraped data
+        self.update_excel(original_url, price) #, mrp, discount
+
+        yield {
+            'price': price
+            # 'mrp': mrp,
+            # 'discount': discount
+        }
+
+    def update_excel(self, url, price): #, mrp, discount
+        # Read the existing data from the Excel file
+        excel_path = 'C:/Users/Public/Pictures/ScrapyTutorial/quotetutorial/amazon.xlsx'
+        df = pd.read_excel(excel_path)
+
+        # Find the row index corresponding to the URL
+        row_index = df.index[df['Url'] == url].tolist()[0]
+
+        # Update the values in the respective columns
+        df.at[row_index, 'Scraped_Price'] = price
+        # df.at[row_index, 'Scraped_MRP'] = mrp
+        # df.at[row_index, 'Scraped_Discount'] = discount
+
+        # Save the updated DataFrame back to the Excel file
+        df.to_excel(excel_path, index=False)
